@@ -1,0 +1,152 @@
+package com.codingwithmitch.googlemaps2018.ui;
+
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.os.Bundle;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.app.Fragment;
+import android.support.v7.widget.LinearLayoutManager;
+import android.support.v7.widget.RecyclerView;
+import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+
+
+import com.codingwithmitch.googlemaps2018.R;
+import com.codingwithmitch.googlemaps2018.adapters.UserRecyclerAdapter;
+import com.codingwithmitch.googlemaps2018.models.User;
+import com.codingwithmitch.googlemaps2018.models.UserAccounts;
+import com.codingwithmitch.googlemaps2018.util.ClusterMarker;
+import com.google.android.gms.maps.CameraUpdateFactory;
+import com.google.android.gms.maps.GoogleMap;
+import com.google.android.gms.maps.MapView;
+import com.google.android.gms.maps.OnMapReadyCallback;
+import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.maps.android.clustering.ClusterManager;
+import com.google.maps.android.clustering.view.ClusterRenderer;
+
+import java.util.ArrayList;
+
+import static com.codingwithmitch.googlemaps2018.Constants.MAPVIEW_BUNDLE_KEY;
+
+public class UserListFragment extends Fragment implements OnMapReadyCallback {
+
+    private static final String TAG = "UserListFragment";
+    private MapView mMapView;
+    ArrayList<UserAccounts> locations=new ArrayList<>();
+    //widgets
+    private RecyclerView mUserListRecyclerView;
+    UserAccounts userPosition;
+    GoogleMap googleMap;
+    ClusterManager<ClusterMarker> mClusterManager;
+    LatLngBounds bound;
+    ClusterRenderer mClusterManagerRenderer;
+
+    //vars
+    private ArrayList<User> mUserList = new ArrayList<>();
+    private UserRecyclerAdapter mUserRecyclerAdapter;
+
+
+    public static UserListFragment newInstance() {
+        return new UserListFragment();
+    }
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        if (getArguments() != null) {
+            mUserList = getArguments().getParcelableArrayList(getString(R.string.intent_user_list));
+            locations=getArguments().getParcelableArrayList("intent_user_accounts");
+            for(int i=0;i<locations.size();i++)
+            {
+                String user=locations.get(i).getUser().getUser_id();
+                String curr=FirebaseAuth.getInstance().getUid();
+                if((locations.get(i).getUser().getUser_id()).equals((FirebaseAuth.getInstance().getCurrentUser().getUid())))
+                {
+                    userPosition=locations.get(i);
+                }
+                UserAccounts userAccounts=userPosition;
+
+
+            }
+        }
+    }
+
+    @Nullable
+    @Override
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+        View view = inflater.inflate(R.layout.fragment_user_list, container, false);
+        mUserListRecyclerView = view.findViewById(R.id.user_list_recycler_view);
+
+        initUserListRecyclerView();
+        Bundle mapViewBundle = null;
+        if (savedInstanceState != null) {
+            mapViewBundle = savedInstanceState.getBundle(MAPVIEW_BUNDLE_KEY);
+        }
+        mMapView = (MapView) view.findViewById(R.id.user_list_map);
+        mMapView.onCreate(mapViewBundle);
+
+        mMapView.getMapAsync(this);
+        return view;
+    }
+    public void setCameraView()
+    {
+        double bottomboundary=userPosition.getGeoPoint().getLatitude()-0.1;
+        double leftboundary=userPosition.getGeoPoint().getLongitude()-0.1;
+        double rightboundary=userPosition.getGeoPoint().getLongitude()+0.1;
+        double topboundary=userPosition.getGeoPoint().getLatitude()+0.1;
+        bound=new LatLngBounds(new LatLng(bottomboundary,leftboundary),new LatLng(topboundary,rightboundary));
+        googleMap.moveCamera(CameraUpdateFactory.newLatLngBounds(bound,0));
+    }
+    private void addMapMarkers(){
+
+        if(googleMap != null){
+
+            if(mClusterManager == null){
+                mClusterManager = new ClusterManager<ClusterMarker>(getActivity().getApplicationContext(), googleMap);
+            }
+            if(mClusterManagerRenderer == null){
+                mClusterManagerRenderer = new MyClusterManagerRenderer(
+                        getActivity(),
+                        googleMap,
+                        mClusterManager
+                );
+                mClusterManager.setRenderer(mClusterManagerRenderer);
+            }
+
+            for(UserAccounts userLocation: locations){
+
+                Log.d(TAG, "addMapMarkers: location: " + userLocation.getGeoPoint().toString());
+                try{
+                    String snippet = "";
+                    if(userLocation.getUser().getUser_id().equals(FirebaseAuth.getInstance().getUid())){
+                        snippet = "This is you";
+                    }
+                    else{
+                        snippet = "Determine route to " + userLocation.getUser().getUsername() + "?";
+                    }
+
+                    int avatar = R.drawable.cartman_cop; // set the default avatar
+                    try{
+                        avatar = Integer.parseInt(userLocation.getUser().getAvatar());
+                    }catch (NumberFormatException e){
+                        Log.d(TAG, "addMapMarkers: no avatar for " + userLocation.getUser().getUsername() + ", setting default.");
+                    }
+                    ClusterMarker newClusterMarker = new ClusterMarker(
+                            new LatLng(userLocation.getGeoPoint().getLatitude(), userLocation.getGeo_point().getLongitude()),
+                            userLocation.getUser().getUsername(),
+                            snippet,
+                            avatar,
+                            userLocation.getUser()
+                    );
+                    mClusterManager.addItem(newClusterMarker);
+                    mClusterMarkers.add(newClusterMarker);
+
+                }catch (NullPointerException e){
+                    Log.e(TAG, "addMapMarke
